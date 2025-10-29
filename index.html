@@ -1,101 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Museum Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- Leaflet CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Leaflet CSS (no SRI to avoid integrity mismatches) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #legend {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      background: rgba(255,255,255,0.9);
-      padding: 8px 10px;
-      font-family: sans-serif;
-      font-size: 14px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-      border-radius: 4px;
-    }
-    #legend label {
-      display: block;
-      margin: 4px 0;
-      cursor: pointer;
-    }
+      html, body, #map { height: 100%; margin: 0; }
+      .panel {
+          position: absolute; z-index: 1000;
+          top: 10px; left: 10px;
+          background: rgba(255,255,255,0.95);
+          padding: 10px 12px;
+          border-radius: 6px;
+          box-shadow: 0 2px 10px rgba(0,0,0,.2);
+          font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+          max-width: 320px;
+      }
+      .panel h1 {
+          font-size: 16px; margin: 0 0 6px; font-weight: 600;
+      }
+      .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+      select, input[type="text"] {
+          font: inherit; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc;
+      }
+      .legend {
+          margin-top: 8px; font-size: 13px;
+      }
+      .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   </style>
 </head>
-
 <body>
-  <div id="map"></div>
-  <div id="legend">
-    <label><input type="checkbox" data-file="museums.geojson" checked> Main Museums</label>
-    <!-- add more layers later, e.g. per-state files -->
-    <!-- <label><input type="checkbox" data-file="museums-WA.geojson" checked> Washington</label> -->
+<div id="map"></div>
+
+<div class="panel">
+  <h1>Museums</h1>
+
+  <div class="row">
+    <label for="typeFilter" style="white-space:nowrap;">Type:</label>
+    <select id="typeFilter">
+      <option value="">All types</option>
+    </select>
   </div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div id="counts" class="row" style="margin-top:8px; color:#333;"></div>
 
-  <script>
-    const map = L.map('map').setView([39, -98], 4);
+  <div class="legend">
+    <div><span class="dot" style="background:#e63946;"></span>Art</div>
+    <div><span class="dot" style="background:#457b9d;"></span>Science</div>
+    <div><span class="dot" style="background:#2a9d8f;"></span>History</div>
+    <div><span class="dot" style="background:#f4a261;"></span>Children</div>
+    <div><span class="dot" style="background:#1d3557;"></span>Natural History</div>
+    <div><span class="dot" style="background:#6c757d;"></span>Other</div>
+  </div>
+</div>
 
-    // Base layer
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // --- Map setup ---
+    const map = L.map('map', { zoomControl: true }).setView([39, -98], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Store loaded layers so we can toggle them
-    const loadedLayers = {};
-
-    // Function to load and display a GeoJSON layer
-    function loadLayer(file) {
-      fetch(file)
-        .then(res => {
-          if (!res.ok) throw new Error(`Failed to load ${file}`);
-          return res.json();
-        })
-        .then(data => {
-          const layer = L.geoJSON(data, {
-            pointToLayer: (f, latlng) =>
-              L.circleMarker(latlng, { radius: 4, color: '#2a9d8f', fillOpacity: 0.8 }),
-            onEachFeature: (f, l) => {
-              const p = f.properties || {};
-              l.bindPopup(`
-                <strong>${p.name || 'Museum'}</strong><br>
-                ${p.city || ''}${p.city && p.state ? ', ' : ''}${p.state || ''}<br>
-                ${p.website ? `<a href="${p.website}" target="_blank">${p.website}</a>` : ''}
-              `);
-            }
-          }).addTo(map);
-          loadedLayers[file] = layer;
-        })
-        .catch(err => console.error(err));
+    // --- Color mapping by museum type ---
+    function colorForType(type) {
+        if (!type) return '#6c757d';
+        const t = String(type).toLowerCase();
+        if (t.includes('art')) return '#e63946';
+        if (t.includes('science')) return '#457b9d';
+        if (t.includes('history')) return '#2a9d8f';
+        if (t.includes('children')) return '#f4a261';
+        if (t.includes('natural')) return '#1d3557';
+        return '#6c757d';
     }
 
-    // Toggle visibility from legend checkboxes
-    document.querySelectorAll('#legend input[type="checkbox"]').forEach(cb => {
-      const file = cb.dataset.file;
-      if (cb.checked) loadLayer(file);
-      cb.addEventListener('change', e => {
-        if (e.target.checked) {
-          loadLayer(file);
-        } else if (loadedLayers[file]) {
-          map.removeLayer(loadedLayers[file]);
-          delete loadedLayers[file];
+    // --- Global state ---
+    let allFeatures = [];     // raw features from GeoJSON
+    let layer = null;         // current Leaflet layer
+    const typeSelect = document.getElementById('typeFilter');
+    const countsEl = document.getElementById('counts');
+
+    // --- Render function (applies filter and redraws) ---
+    function render(typeFilterValue) {
+        if (layer) {
+            map.removeLayer(layer);
+            layer = null;
         }
-      });
-    });
-  </script>
+
+        const filtered = allFeatures.filter(f => {
+            if (!typeFilterValue) return true; // show all
+            const t = (f.properties?.Type || '').toString().trim().toLowerCase();
+            return t.includes(typeFilterValue.toLowerCase());
+        });
+
+        layer = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
+            pointToLayer: (f, latlng) => {
+                const color = colorForType(f.properties?.Type);
+                return L.circleMarker(latlng, {
+                    radius: 5, color, fillColor: color, fillOpacity: 0.9, weight: 1
+                });
+            },
+            onEachFeature: (f, l) => {
+                const p = f.properties || {};
+                const name = p.Name || 'Unnamed museum';
+                const addr = p.Address || '';
+                const city = p.City || '';
+                const state = p.State || '';
+                const zip = p.Zip || '';
+                const phone = p.Phone || '';
+                const url = p.URL || p.Url || '';
+                const lineCity = city && state ? `${city}, ${state}` : (city || state || '');
+                const lineAddr = [addr, zip].filter(Boolean).join(' ');
+                const link = url ? `<br><a href="${url}" target="_blank" rel="noopener">${url}</a>` : '';
+                l.bindPopup(`
+            <strong>${name}</strong><br>
+            ${lineAddr ? lineAddr + '<br>' : ''}
+            ${lineCity ? lineCity + '<br>' : ''}
+            ${phone ? phone + '<br>' : '' }
+            ${p.Type ? `<em>${p.Type}</em>` : ''}${link}
+          `);
+            }
+        }).addTo(map);
+
+        // Update counts
+        countsEl.textContent = `Showing ${filtered.length.toLocaleString()} of ${allFeatures.length.toLocaleString()} museums`;
+
+        // Fit bounds (guard for empty)
+        const b = layer.getBounds();
+        if (b.isValid()) {
+            map.fitBounds(b, { padding: [20, 20] });
+        }
+    }
+
+    // --- Load data and initialize UI ---
+    fetch('museums.geojson', { cache: 'no-store' })
+        .then(res => {
+            if (!res.ok) throw new Error(`Failed to load museums.geojson: ${res.status}`);
+            return res.json();
+        })
+        .then(geo => {
+            if (!geo || !Array.isArray(geo.features)) throw new Error('Invalid GeoJSON format');
+            allFeatures = geo.features;
+
+            // Build the type dropdown from data
+            const typeSet = new Set();
+            allFeatures.forEach(f => {
+                const raw = (f.properties?.Type || '').toString().trim();
+                if (raw) typeSet.add(raw);
+            });
+
+            // Sort types alphabetically (case-insensitive)
+            const types = Array.from(typeSet).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+            types.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t; opt.textContent = t;
+                typeSelect.appendChild(opt);
+            });
+
+            // Initial render (All)
+            render('');
+
+            // Hook up filter change
+            typeSelect.addEventListener('change', () => {
+                render(typeSelect.value);
+            });
+        })
+        .catch(err => {
+            console.error(err);
+            countsEl.textContent = 'Error loading data';
+        });
+</script>
 </body>
 </html>
-
