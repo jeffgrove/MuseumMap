@@ -80,8 +80,8 @@
         if (t.includes('art')) return '#E63946';
         if (t.includes('botanical')) return '#43AA8B';
         if (t.includes('children')) return '#4CC9F0';
-        if (t.includes('history') && !t.includes('natural')) return '#F9c74f';
-        if (t.includes('natural')) return '#F3722C';
+        if (t.includes('natural')) return '#F3722C'; // do this one before history to catch natural history
+        if (t.includes('history')) return '#F9c74f';
         if (t.includes('science')) return '#720987';
         if (t.includes('zoo')) return '#4361EE';
         return '#808080';
@@ -103,14 +103,14 @@
         const filtered = allFeatures.filter(f => {
             if (!typeFilterValue) return true; // show all
             const t = (f.properties?.Type || '').toString().trim().toLowerCase();
-            return t.includes(typeFilterValue.toLowerCase());
+            return t.match(typeFilterValue.toLowerCase());
         });
 
         layer = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
             pointToLayer: (f, latlng) => {
                 const color = colorForType(f.properties?.Type);
                 return L.circleMarker(latlng, {
-                    radius: 5, color, fillColor: color, fillOpacity: 0.9, weight: 1
+                    radius: 10, color, fillColor: color, fillOpacity: 0.9, weight: 1
                 });
             },
             onEachFeature: (f, l) => {
