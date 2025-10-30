@@ -72,7 +72,13 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
-
+  
+    // Radius scale based on zoom (tweak as you like)
+    function radiusForZoom(z) {
+        const r = 3 * Math.pow(1.25, z - 4); // grows ~25% per zoom level
+        return Math.max(3, Math.min(18, r)); // clamp between 3 and 18 px
+    }
+  
     // --- Color mapping by museum type ---
     function colorForType(type) {
         if (!type) return '#808080';
@@ -80,37 +86,53 @@
         if (t.includes('art')) return '#E63946';
         if (t.includes('botanical')) return '#43AA8B';
         if (t.includes('children')) return '#4CC9F0';
-        if (t.includes('natural')) return '#F3722C'; // do this one before history to catch natural history
+        if (t.includes('natural')) return '#F3722C'; // before history to catch "natural history"
         if (t.includes('history')) return '#F9c74f';
         if (t.includes('science')) return '#720987';
         if (t.includes('zoo')) return '#4361EE';
         return '#808080';
     }
-
+  
     // --- Global state ---
     let allFeatures = [];     // raw features from GeoJSON
     let layer = null;         // current Leaflet layer
     const typeSelect = document.getElementById('typeFilter');
     const countsEl = document.getElementById('counts');
-
+    let zoomHandlerAttached = false;
+  
+    // Resize all circle markers in-place
+    function resizeMarkers() {
+      if (!layer) return;
+      const r = radiusForZoom(map.getZoom());
+      layer.eachLayer(l => {
+        // l is a CircleMarker for point features
+        if (l.setRadius) l.setRadius(r);
+        // if you ever wrap markers in groups, also iterate inner:
+        if (l.eachLayer) l.eachLayer(inner => inner.setRadius && inner.setRadius(r));
+      });
+    }
+  
     // --- Render function (applies filter and redraws) ---
     function render(typeFilterValue) {
         if (layer) {
             map.removeLayer(layer);
             layer = null;
         }
-
+  
         const filtered = allFeatures.filter(f => {
             if (!typeFilterValue) return true; // show all
             const t = (f.properties?.Type || '').toString().trim().toLowerCase();
             return t.match(typeFilterValue.toLowerCase());
         });
-
+  
+        const initialRadius = radiusForZoom(map.getZoom());
+  
         layer = L.geoJSON({ type: 'FeatureCollection', features: filtered }, {
             pointToLayer: (f, latlng) => {
                 const color = colorForType(f.properties?.Type);
                 return L.circleMarker(latlng, {
-                    radius: 10, color, fillColor: color, fillOpacity: 0.9, weight: 1
+                    radius: initialRadius,  // initial size
+                    color, fillColor: color, fillOpacity: 0.9, weight: 1
                 });
             },
             onEachFeature: (f, l) => {
@@ -126,15 +148,15 @@
                 const lineAddr = [addr, zip].filter(Boolean).join(' ');
                 const link = url ? `<br><a href="${url}" target="_blank" rel="noopener">${url}</a>` : '';
                 l.bindPopup(`
-            <strong>${name}</strong><br>
-            ${lineAddr ? lineAddr + '<br>' : ''}
-            ${lineCity ? lineCity + '<br>' : ''}
-            ${phone ? phone + '<br>' : '' }
-            ${p.Type ? `<em>${p.Type}</em>` : ''}${link}
-          `);
+                    <strong>${name}</strong><br>
+                    ${lineAddr ? lineAddr + '<br>' : ''}
+                    ${lineCity ? lineCity + '<br>' : ''}
+                    ${phone ? phone + '<br>' : '' }
+                    ${p.Type ? `<em>${p.Type}</em>` : ''}${link}
+                `);
             }
         }).addTo(map);
-
+  
         // Update counts
         countsEl.textContent = `Showing ${filtered.length.toLocaleString()} of ${allFeatures.length.toLocaleString()} museums`;
 
@@ -143,8 +165,17 @@
         if (b.isValid()) {
             map.fitBounds(b, { padding: [20, 20] });
         }
-    }
 
+        // Attach zoom handler once; it resizes existing markers using .setRadius
+        if (!zoomHandlerAttached) {
+            map.on('zoomend', resizeMarkers);
+            zoomHandlerAttached = true;
+        }
+
+        // Ensure current size matches current zoom
+        resizeMarkers();
+    }
+  
     // --- Load data and initialize UI ---
     fetch('museums.geojson', { cache: 'no-store' })
         .then(res => {
@@ -183,5 +214,6 @@
             countsEl.textContent = 'Error loading data';
         });
 </script>
+  
 </body>
 </html>
