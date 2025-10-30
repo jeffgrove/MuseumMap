@@ -49,12 +49,13 @@
   <div id="counts" class="row" style="margin-top:8px; color:#333;"></div>
 
   <div class="legend">
-    <div><span class="dot" style="background:#e63946;"></span>Art</div>
-    <div><span class="dot" style="background:#457b9d;"></span>Science</div>
-    <div><span class="dot" style="background:#2a9d8f;"></span>History</div>
-    <div><span class="dot" style="background:#f4a261;"></span>Children</div>
-    <div><span class="dot" style="background:#1d3557;"></span>Natural History</div>
-    <div><span class="dot" style="background:#6c757d;"></span>Other</div>
+    <div><span class="dot" style="background:#E63946;"></span>Art</div>
+    <div><span class="dot" style="background:#43AA8B;"></span>Botanical and Nature</div>
+    <div><span class="dot" style="background:#720987;"></span>Science And Technology</div>
+    <div><span class="dot" style="background:#F9c74f;"></span>History</div>
+    <div><span class="dot" style="background:#4CC9F0;"></span>Children's</div>
+    <div><span class="dot" style="background:#F3722C;"></span>Natural History and Natural Science</div>
+    <div><span class="dot" style="background:#4361EE;"></span>Zoo, Aquarium and Wildlife</div>
   </div>
 </div>
 
@@ -70,14 +71,16 @@
 
     // --- Color mapping by museum type ---
     function colorForType(type) {
-        if (!type) return '#6c757d';
+        if (!type) return '#808080';
         const t = String(type).toLowerCase();
-        if (t.includes('art')) return '#e63946';
-        if (t.includes('science')) return '#457b9d';
-        if (t.includes('history')) return '#2a9d8f';
-        if (t.includes('children')) return '#f4a261';
-        if (t.includes('natural')) return '#1d3557';
-        return '#6c757d';
+        if (t.includes('art')) return '#E634946';
+        if (t.includes('botanical and nature')) return '#43AA8B';
+        if (t.includes('Science And Technology')) return '#720987';
+        if (t.equals('history')) return '#F9c74f';
+        if (t.includes('children\'s')) return '#4CC9F0';
+        if (t.includes('natural history')) return '#F3722C';
+        if (t.includes('zoo')) return '#4361EE';
+        return '#808080';
     }
 
     // --- Global state ---
